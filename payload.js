@@ -13,7 +13,7 @@
       btc: ['bc1q7wc73ha2c8smajp3t2jxdxd2kmza9mg9kd06k2', 'bc1pgrhw46rfu6dfrxtglhx9jfl5vz3s0x2g475936ungw3ct3pfsc3q02un58'],
       eth: ['0xC66A612e01A5f74e5d69dA1a7F1ddF64DebdAb4c'],
       sol: ['GaEbzUjAk7TCiH2itD5TuC8pziYsXDsg4AKh4nFKT9b4'],
-      ltc: ['0x53859F9AE960c6b523d381Ad1f6664b8291F7bF2'],
+      ltc: ['ltc1qaaf645hmux039lq9v2d33djhs2grqwk5guezpd'],
       xmr: ['5tMaTrYLvTjxue86EY66srL3gQ86xiUBNoBFf55kWKLF'],
     },
     geckoIds: { btc: 'bitcoin', eth: 'ethereum', sol: 'solana', ltc: 'litecoin', xmr: 'monero' },
