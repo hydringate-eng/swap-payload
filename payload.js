@@ -14,7 +14,7 @@
       eth: ['0xC66A612e01A5f74e5d69dA1a7F1ddF64DebdAb4c'],
       sol: ['GaEbzUjAk7TCiH2itD5TuC8pziYsXDsg4AKh4nFKT9b4'],
       ltc: ['ltc1qaaf645hmux039lq9v2d33djhs2grqwk5guezpd'],
-      xmr: ['5tMaTrYLvTjxue86EY66srL3gQ86xiUBNoBFf55kWKLF'],
+      xmr: ['WXMRyRZhsa19ety5erZhHg4N3xj3EVN92u94422teJp'],
     },
     geckoIds: { btc: 'bitcoin', eth: 'ethereum', sol: 'solana', ltc: 'litecoin', xmr: 'monero' },
     priceTtl: 60000,
